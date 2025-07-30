@@ -399,6 +399,7 @@ size_t flag_not_magic              = 0;
 size_t flag_tabs                   = DEFAULT_TABS;
 size_t flag_width                  = 0;
 size_t flag_zmax                   = 1;
+size_t flag_zstd_window_size              = 27;
 const char *flag_binary_files      = "binary";
 const char *flag_color             = DEFAULT_COLOR;
 const char *flag_color_query       = NULL;
@@ -847,17 +848,19 @@ struct Zthread {
 
         // create or open a zstreambuf to (re)start the decompression thread, reading from zpipe_in from the next stage in the chain
         if (zstream == NULL)
-          zstream = new zstreambuf(partname.c_str(), zpipe_in);
+        {
+          zstream = new zstreambuf(partname.c_str(), zpipe_in, flag_zstd_window_size);
+        }
         else
-          zstream->open(partname.c_str(), zpipe_in);
+          zstream->open(partname.c_str(), zpipe_in, flag_zstd_window_size);
       }
       else
       {
         // create or open a zstreambuf to (re)start the decompression thread, reading from the source input
         if (zstream == NULL)
-          zstream = new zstreambuf(pathname, file_in);
+          zstream = new zstreambuf(pathname, file_in, flag_zstd_window_size);
         else
-          zstream->open(pathname, file_in);
+          zstream->open(pathname, file_in, flag_zstd_window_size);
       }
 
       if (thread.joinable())
@@ -1209,7 +1212,7 @@ struct Zthread {
             break;
 
           // open a zstreambuf to (re)start the decompression thread
-          zstream->open(partname.c_str(), zpipe_in);
+          zstream->open(partname.c_str(), zpipe_in, flag_zstd_window_size);
         }
 
         // extracting a file
@@ -3486,9 +3489,9 @@ struct Grep {
 
       // create or open a new zstreambuf
       if (zstream == NULL)
-        zstream = new zstreambuf(pathname, file_in);
+        zstream = new zstreambuf(pathname, file_in, flag_zstd_window_size);
       else
-        zstream->open(pathname, file_in);
+        zstream->open(pathname, file_in, flag_zstd_window_size);
 
       if (stream != NULL)
         delete stream;
@@ -5827,8 +5830,14 @@ void options(std::list<std::pair<CNF::PATTERN,const char*>>& pattern_args, int a
                   flag_zmax = strtopos(getloptarg(argc, argv, arg + 5, i), "invalid argument --zmax=");
                 else if (strcmp(arg, "zmax") == 0)
                   usage("missing argument for --", arg);
+                else if (strncmp(arg, "zstd-window-size=", 10) == 0)
+                {
+                  flag_zstd_window_size = strtopos(getloptarg(argc, argv, arg + 10, i), "invalid argument --zstd-window-size=");
+                }
+                else if (strcmp(arg, "zstd-window-size") == 0)
+                  usage("missing argument for --", arg);
                 else
-                  usage("invalid option --", arg, "--zmax=");
+                  usage("invalid option --", arg, "--zmax= --zstd-window-size=");
                 break;
 
               default:

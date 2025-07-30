@@ -1151,10 +1151,11 @@ class zstreambuf : public std::streambuf {
   { }
 
   // constructor
-  zstreambuf(const char *pathname, FILE *file)
+  zstreambuf(const char *pathname, FILE *file, size_t zstd_window_size = 27)
     :
       pathname_(pathname),
       file_(file),
+      zstd_window_size_(zstd_window_size),
       zfile_(NULL),
       zzfile_(NULL),
       bzfile_(NULL),
@@ -1167,7 +1168,7 @@ class zstreambuf : public std::streambuf {
       cur_(0),
       len_(0)
   {
-    open(pathname, file);
+    open(pathname, file, zstd_window_size);
   }
 
   // no copy constructor
@@ -1180,7 +1181,7 @@ class zstreambuf : public std::streambuf {
   }
 
   // open the decompression stream
-  void open(const char *pathname, FILE *file)
+  void open(const char *pathname, FILE *file, size_t zstd_window_size = 27)
   {
     // close old stream, if still open
     close();
@@ -1190,9 +1191,11 @@ class zstreambuf : public std::streambuf {
 
     pathname_ = pathname;
     file_ = file;
+    zstd_window_size_ = zstd_window_size;
 
     cur_ = 0;
     len_ = 0;
+    
 
     if (is_bz(pathname))
     {
@@ -1283,7 +1286,7 @@ class zstreambuf : public std::streambuf {
       // open zstd compressed file
       try
       {
-        zstdfile_ = new ZSTD();
+        zstdfile_ = new ZSTD(zstd_window_size_);
         if (zstdfile_->strm == NULL || zstdfile_->zbuf == NULL)
         {
           warning("ZSTD_createDStream failed", pathname);
@@ -1510,7 +1513,7 @@ class zstreambuf : public std::streambuf {
             // open zstd compressed file and pass the first 4 bytes to its input buffer
             try
             {
-              zstdfile_ = new ZSTD();
+              zstdfile_ = new ZSTD(zstd_window_size_);
               if (zstdfile_->strm == NULL || zstdfile_->zbuf == NULL)
               {
                 warning("ZSTD_createDStream failed", pathname);
@@ -1923,7 +1926,7 @@ class zstreambuf : public std::streambuf {
   // zstd decompression state data
   struct ZSTD {
 
-    ZSTD()
+    ZSTD(size_t window_size = 27)
       :
         strm(ZSTD_createDStream()),
         zbuf(static_cast<unsigned char*>(malloc(ZSTD_DStreamInSize()))),
@@ -1933,6 +1936,17 @@ class zstreambuf : public std::streambuf {
     {
       if (zbuf == NULL)
         throw std::bad_alloc();
+      if (strm != NULL && window_size > 0)
+      {
+        size_t result = ZSTD_DCtx_setParameter(strm, ZSTD_d_windowLogMax, window_size);
+        if (ZSTD_isError(result))
+        {
+          // Debug: print the error
+          fprintf(stderr, "ZSTD_DCtx_setParameter failed: %s (window_size=%zu)\n", 
+                  ZSTD_getErrorName(result), window_size);
+          throw std::bad_alloc();
+        }
+      }
     }
 
     ~ZSTD()
@@ -2894,6 +2908,7 @@ class zstreambuf : public std::streambuf {
 
   const char     *pathname_;       // the pathname of the compressed file
   FILE           *file_;           // the compressed file
+  size_t          zstd_window_size_; // zstd window size parameter
   zFile           zfile_;          // zlib file handle
   zzFile          zzfile_;         // compress (Z) file handle
   bzFile          bzfile_;         // bzip/bzip2 file handle

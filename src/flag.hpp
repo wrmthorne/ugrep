@@ -168,6 +168,7 @@ extern size_t flag_not_magic;
 extern size_t flag_tabs;
 extern size_t flag_width;
 extern size_t flag_zmax;
+extern size_t flag_zstd_window_size;
 extern const char *flag_binary_files;
 extern const char *flag_color;
 extern const char *flag_color_query; // internal flag
